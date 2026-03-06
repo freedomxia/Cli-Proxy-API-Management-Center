@@ -816,14 +816,25 @@ export function VisualConfigEditor({ values, disabled = false, onChange }: Visua
 
       <ConfigSection title={t('config_management.visual.sections.auth.title')} description={t('config_management.visual.sections.auth.description')}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Input
-            label={t('config_management.visual.sections.auth.auth_dir')}
-            placeholder="~/.cli-proxy-api"
-            value={values.authDir}
-            onChange={(e) => onChange({ authDir: e.target.value })}
-            disabled={disabled}
-            hint={t('config_management.visual.sections.auth.auth_dir_hint')}
-          />
+          <SectionGrid>
+            <Input
+              label={t('config_management.visual.sections.auth.auth_dir')}
+              placeholder="~/.cli-proxy-api"
+              value={values.authDir}
+              onChange={(e) => onChange({ authDir: e.target.value })}
+              disabled={disabled}
+              hint={t('config_management.visual.sections.auth.auth_dir_hint')}
+            />
+            <Input
+              label={t('config_management.visual.sections.auth.plugin_connection_token')}
+              type="password"
+              placeholder={t('config_management.visual.sections.auth.plugin_connection_token_placeholder')}
+              value={values.pluginConnectionToken}
+              onChange={(e) => onChange({ pluginConnectionToken: e.target.value })}
+              disabled={disabled}
+              hint={t('config_management.visual.sections.auth.plugin_connection_token_hint')}
+            />
+          </SectionGrid>
           <ApiKeysCardEditor
             value={values.apiKeysText}
             disabled={disabled}

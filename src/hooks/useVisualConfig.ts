@@ -312,6 +312,10 @@ export function useVisualConfig() {
               : '',
 
         authDir: typeof parsed['auth-dir'] === 'string' ? parsed['auth-dir'] : '',
+        pluginConnectionToken:
+          typeof parsed['plugin-connection-token'] === 'string'
+            ? parsed['plugin-connection-token']
+            : '',
         apiKeysText: parseApiKeysText(parsed['api-keys']),
 
         debug: Boolean(parsed.debug),
@@ -402,6 +406,7 @@ export function useVisualConfig() {
         }
 
         setStringInDoc(doc, ['auth-dir'], values.authDir);
+        setStringInDoc(doc, ['plugin-connection-token'], values.pluginConnectionToken);
         if (values.apiKeysText !== baselineValues.apiKeysText) {
           const apiKeys = values.apiKeysText
             .split('\n')

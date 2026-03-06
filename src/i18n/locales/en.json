@@ -1128,7 +1128,10 @@
           "title": "Authentication Configuration",
           "description": "API keys and authentication directory settings",
           "auth_dir": "Auth Directory (auth-dir)",
-          "auth_dir_hint": "Directory path for authentication files (supports ~)"
+          "auth_dir_hint": "Directory path for authentication files (supports ~)",
+          "plugin_connection_token": "Plugin Connection Token (plugin-connection-token)",
+          "plugin_connection_token_placeholder": "Set the connection token used by external token updaters",
+          "plugin_connection_token_hint": "Used to authorize /api/plugin/* requests; leave empty to disable external plugin credential uploads"
         },
         "system": {
           "title": "System Configuration",

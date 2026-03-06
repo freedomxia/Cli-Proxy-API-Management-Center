@@ -1128,7 +1128,10 @@
           "title": "认证配置",
           "description": "API 密钥与认证文件目录设置",
           "auth_dir": "认证文件目录 (auth-dir)",
-          "auth_dir_hint": "存放认证文件的目录路径（支持 ~）"
+          "auth_dir_hint": "存放认证文件的目录路径（支持 ~）",
+          "plugin_connection_token": "插件连接令牌 (plugin-connection-token)",
+          "plugin_connection_token_placeholder": "设置外部 Token Updater 使用的连接令牌",
+          "plugin_connection_token_hint": "用于 /api/plugin/* 接口鉴权；留空表示禁用外部插件凭证推送"
         },
         "system": {
           "title": "系统配置",
