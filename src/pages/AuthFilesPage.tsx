@@ -18,6 +18,7 @@ import { usePageTransitionLayer } from '@/components/common/PageTransitionLayer'
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { copyToClipboard } from '@/utils/clipboard';
 import {
@@ -32,6 +33,7 @@ import {
   type QuotaProviderType,
   type ResolvedTheme,
 } from '@/features/authFiles/constants';
+import { isDisabledAuthFile } from '@/utils/quota';
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
 import { AuthFileDetailModal } from '@/features/authFiles/components/AuthFileDetailModal';
 import { AuthFileModelsModal } from '@/features/authFiles/components/AuthFileModelsModal';
@@ -64,6 +66,7 @@ export function AuthFilesPage() {
   const navigate = useNavigate();
 
   const [filter, setFilter] = useState<'all' | string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(9);
@@ -88,6 +91,9 @@ export function AuthFilesPage() {
     deleting,
     deletingAll,
     statusUpdating,
+    quotaChecking,
+    invalidChecking,
+    recoveryChecking,
     fileInputRef,
     loadFiles,
     handleUploadClick,
@@ -96,6 +102,9 @@ export function AuthFilesPage() {
     handleDeleteAll,
     handleDownload,
     handleStatusToggle,
+    handleDetectCodexLimitAll,
+    handleDetectCodexInvalidDelete,
+    handleDetectCodexRecoveryEnable,
     toggleSelect,
     selectAllVisible,
     deselectAll,
@@ -162,6 +171,9 @@ export function AuthFilesPage() {
     if (typeof persisted.filter === 'string' && persisted.filter.trim()) {
       setFilter(persisted.filter);
     }
+    if (persisted.statusFilter === 'enabled' || persisted.statusFilter === 'disabled') {
+      setStatusFilter(persisted.statusFilter);
+    }
     if (typeof persisted.search === 'string') {
       setSearch(persisted.search);
     }
@@ -174,8 +186,8 @@ export function AuthFilesPage() {
   }, []);
 
   useEffect(() => {
-    writeAuthFilesUiState({ filter, search, page, pageSize });
-  }, [filter, search, page, pageSize]);
+    writeAuthFilesUiState({ filter, statusFilter, search, page, pageSize });
+  }, [filter, statusFilter, search, page, pageSize]);
 
   useEffect(() => {
     setPageSizeInput(String(pageSize));
@@ -260,15 +272,18 @@ export function AuthFilesPage() {
   const filtered = useMemo(() => {
     return files.filter((item) => {
       const matchType = filter === 'all' || item.type === filter;
+      const isDisabled = isDisabledAuthFile(item);
+      const matchStatus =
+        statusFilter === 'all' || (statusFilter === 'enabled' ? !isDisabled : isDisabled);
       const term = search.trim().toLowerCase();
       const matchSearch =
         !term ||
         item.name.toLowerCase().includes(term) ||
         (item.type || '').toString().toLowerCase().includes(term) ||
         (item.provider || '').toString().toLowerCase().includes(term);
-      return matchType && matchSearch;
+      return matchType && matchStatus && matchSearch;
     });
-  }, [files, filter, search]);
+  }, [files, filter, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -472,6 +487,38 @@ export function AuthFilesPage() {
             </Button>
             <Button
               size="sm"
+              onClick={handleDetectCodexLimitAll}
+              disabled={
+                disableControls || loading || quotaChecking || invalidChecking || recoveryChecking
+              }
+              loading={quotaChecking}
+            >
+              {t('auth_files.quota_detect_button')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleDetectCodexRecoveryEnable}
+              disabled={
+                disableControls || loading || recoveryChecking || quotaChecking || invalidChecking
+              }
+              loading={recoveryChecking}
+            >
+              {t('auth_files.recovery_detect_button')}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => handleDetectCodexInvalidDelete(filtered)}
+              disabled={
+                disableControls || loading || invalidChecking || quotaChecking || recoveryChecking
+              }
+              loading={invalidChecking}
+            >
+              {t('auth_files.invalid_detect_button')}
+            </Button>
+            <Button
+              size="sm"
               onClick={handleUploadClick}
               disabled={disableControls || uploading}
               loading={uploading}
@@ -517,6 +564,22 @@ export function AuthFilesPage() {
                   setPage(1);
                 }}
                 placeholder={t('auth_files.search_placeholder')}
+              />
+            </div>
+            <div className={styles.filterItem}>
+              <label>{t('auth_files.status_filter_label')}</label>
+              <Select
+                value={statusFilter}
+                options={[
+                  { value: 'all', label: t('auth_files.status_filter_all') },
+                  { value: 'enabled', label: t('auth_files.status_filter_enabled') },
+                  { value: 'disabled', label: t('auth_files.status_filter_disabled') }
+                ]}
+                onChange={(value) => {
+                  setStatusFilter(value as 'all' | 'enabled' | 'disabled');
+                  setPage(1);
+                }}
+                ariaLabel={t('auth_files.status_filter_label')}
               />
             </div>
             <div className={styles.filterItem}>

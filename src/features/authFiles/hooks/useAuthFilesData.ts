@@ -7,6 +7,7 @@ import type { AuthFileItem } from '@/types';
 import { formatFileSize } from '@/utils/format';
 import { MAX_AUTH_FILE_SIZE } from '@/utils/constants';
 import { downloadBlob } from '@/utils/download';
+import { detectCodexLimitReached, isCodexFile, isDisabledAuthFile } from '@/utils/quota';
 import { getTypeLabel, isRuntimeOnlyAuthFile } from '@/features/authFiles/constants';
 
 type DeleteAllOptions = {
@@ -24,6 +25,9 @@ export type UseAuthFilesDataResult = {
   deleting: string | null;
   deletingAll: boolean;
   statusUpdating: Record<string, boolean>;
+  quotaChecking: boolean;
+  invalidChecking: boolean;
+  recoveryChecking: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   loadFiles: () => Promise<void>;
   handleUploadClick: () => void;
@@ -32,6 +36,9 @@ export type UseAuthFilesDataResult = {
   handleDeleteAll: (options: DeleteAllOptions) => void;
   handleDownload: (name: string) => Promise<void>;
   handleStatusToggle: (item: AuthFileItem, enabled: boolean) => Promise<void>;
+  handleDetectCodexLimitAll: () => void;
+  handleDetectCodexInvalidDelete: (targets: AuthFileItem[]) => void;
+  handleDetectCodexRecoveryEnable: () => void;
   toggleSelect: (name: string) => void;
   selectAllVisible: (visibleFiles: AuthFileItem[]) => void;
   deselectAll: () => void;
@@ -55,6 +62,9 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deletingAll, setDeletingAll] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState<Record<string, boolean>>({});
+  const [quotaChecking, setQuotaChecking] = useState(false);
+  const [invalidChecking, setInvalidChecking] = useState(false);
+  const [recoveryChecking, setRecoveryChecking] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -365,6 +375,267 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     [showNotification, t]
   );
 
+  const handleDetectCodexInvalidDelete = useCallback(
+    (targets: AuthFileItem[]) => {
+      const candidates = targets.filter(
+        (file) => isCodexFile(file) && !isRuntimeOnlyAuthFile(file)
+      );
+
+      if (candidates.length === 0) {
+        showNotification(t('auth_files.invalid_detect_none'), 'info');
+        return;
+      }
+
+      showConfirmation({
+        title: t('auth_files.invalid_detect_confirm_title'),
+        message: t('auth_files.invalid_detect_confirm_message', { count: candidates.length }),
+        variant: 'danger',
+        confirmText: t('common.confirm'),
+        onConfirm: async () => {
+          setInvalidChecking(true);
+          let invalidCount = 0;
+          let deleteSuccess = 0;
+          let deleteFail = 0;
+          let detectFail = 0;
+
+          try {
+            const concurrency = Math.min(10, candidates.length);
+            let index = 0;
+            const removedNames = new Set<string>();
+
+            const processFile = async (file: AuthFileItem) => {
+              try {
+                const result = await detectCodexLimitReached(file, t);
+                const statusCode = result.statusCode;
+                const invalidByStatus = statusCode === 401 || statusCode === 403;
+                if (result.error && !invalidByStatus) {
+                  detectFail++;
+                  return;
+                }
+                const invalid = result.limited || invalidByStatus;
+                if (!invalid) return;
+                invalidCount++;
+                try {
+                  await authFilesApi.deleteFile(file.name);
+                  removedNames.add(file.name);
+                  deleteSuccess++;
+                } catch {
+                  deleteFail++;
+                }
+              } catch {
+                detectFail++;
+              }
+            };
+
+            const workers = Array.from({ length: concurrency }, async () => {
+              while (index < candidates.length) {
+                const current = candidates[index];
+                index += 1;
+                if (!current) return;
+                await processFile(current);
+              }
+            });
+
+            await Promise.all(workers);
+
+            if (removedNames.size > 0) {
+              setFiles((prev) => prev.filter((file) => !removedNames.has(file.name)));
+              setSelectedFiles((prev) => {
+                if (prev.size === 0) return prev;
+                let changed = false;
+                const next = new Set<string>();
+                prev.forEach((name) => {
+                  if (removedNames.has(name)) {
+                    changed = true;
+                  } else {
+                    next.add(name);
+                  }
+                });
+                return changed ? next : prev;
+              });
+            }
+
+            showNotification(
+              t('auth_files.invalid_detect_summary', {
+                total: candidates.length,
+                invalid: invalidCount,
+                deleted: deleteSuccess,
+                failed: deleteFail,
+                detectFailed: detectFail
+              }),
+              deleteFail > 0 || detectFail > 0 ? 'warning' : 'success'
+            );
+          } finally {
+            setInvalidChecking(false);
+          }
+        }
+      });
+    },
+    [showConfirmation, showNotification, t]
+  );
+
+  const handleDetectCodexLimitAll = useCallback(() => {
+    const targets = files.filter(
+      (file) => isCodexFile(file) && !isRuntimeOnlyAuthFile(file) && !isDisabledAuthFile(file)
+    );
+
+    if (targets.length === 0) {
+      showNotification(t('auth_files.quota_detect_none'), 'info');
+      return;
+    }
+
+    showConfirmation({
+      title: t('auth_files.quota_detect_confirm_title'),
+      message: t('auth_files.quota_detect_confirm_message', { count: targets.length }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        setQuotaChecking(true);
+        let limitedCount = 0;
+        let disableSuccess = 0;
+        let disableFail = 0;
+        let detectFail = 0;
+
+        try {
+          const concurrency = Math.min(10, targets.length);
+          let index = 0;
+
+          const processFile = async (file: AuthFileItem) => {
+            try {
+              const result = await detectCodexLimitReached(file, t);
+              if (result.error) {
+                detectFail++;
+                return;
+              }
+              if (!result.limited) return;
+              limitedCount++;
+              try {
+                const res = await authFilesApi.setStatus(file.name, true);
+                setFiles((prev) =>
+                  prev.map((item) =>
+                    item.name === file.name ? { ...item, disabled: res.disabled } : item
+                  )
+                );
+                disableSuccess++;
+              } catch {
+                disableFail++;
+              }
+            } catch {
+              detectFail++;
+            }
+          };
+
+          const workers = Array.from({ length: concurrency }, async () => {
+            while (index < targets.length) {
+              const current = targets[index];
+              index += 1;
+              if (!current) return;
+              await processFile(current);
+            }
+          });
+
+          await Promise.all(workers);
+
+          showNotification(
+            t('auth_files.quota_detect_summary', {
+              total: targets.length,
+              limited: limitedCount,
+              disabled: disableSuccess,
+              failed: disableFail,
+              detectFailed: detectFail
+            }),
+            disableFail > 0 || detectFail > 0 ? 'warning' : 'success'
+          );
+        } finally {
+          setQuotaChecking(false);
+        }
+      }
+    });
+  }, [files, showConfirmation, showNotification, t]);
+
+  const handleDetectCodexRecoveryEnable = useCallback(() => {
+    const targets = files.filter(
+      (file) => isCodexFile(file) && !isRuntimeOnlyAuthFile(file) && isDisabledAuthFile(file)
+    );
+
+    if (targets.length === 0) {
+      showNotification(t('auth_files.recovery_detect_none'), 'info');
+      return;
+    }
+
+    showConfirmation({
+      title: t('auth_files.recovery_detect_confirm_title'),
+      message: t('auth_files.recovery_detect_confirm_message', { count: targets.length }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        setRecoveryChecking(true);
+        let recoveredCount = 0;
+        let enableSuccess = 0;
+        let enableFail = 0;
+        let detectFail = 0;
+
+        try {
+          const concurrency = Math.min(10, targets.length);
+          let index = 0;
+
+          const processFile = async (file: AuthFileItem) => {
+            try {
+              const result = await detectCodexLimitReached(file, t);
+              if (result.error) {
+                detectFail++;
+                return;
+              }
+              if (result.limited || !result.statusCode) return;
+              if (result.statusCode < 200 || result.statusCode >= 300) {
+                detectFail++;
+                return;
+              }
+              recoveredCount++;
+              try {
+                const res = await authFilesApi.setStatus(file.name, false);
+                setFiles((prev) =>
+                  prev.map((item) =>
+                    item.name === file.name ? { ...item, disabled: res.disabled } : item
+                  )
+                );
+                enableSuccess++;
+              } catch {
+                enableFail++;
+              }
+            } catch {
+              detectFail++;
+            }
+          };
+
+          const workers = Array.from({ length: concurrency }, async () => {
+            while (index < targets.length) {
+              const current = targets[index];
+              index += 1;
+              if (!current) return;
+              await processFile(current);
+            }
+          });
+
+          await Promise.all(workers);
+
+          showNotification(
+            t('auth_files.recovery_detect_summary', {
+              total: targets.length,
+              recovered: recoveredCount,
+              enabled: enableSuccess,
+              failed: enableFail,
+              detectFailed: detectFail
+            }),
+            enableFail > 0 || detectFail > 0 ? 'warning' : 'success'
+          );
+        } finally {
+          setRecoveryChecking(false);
+        }
+      }
+    });
+  }, [files, showConfirmation, showNotification, t]);
+
   const batchSetStatus = useCallback(
     async (names: string[], enabled: boolean) => {
       const uniqueNames = Array.from(new Set(names));
@@ -498,6 +769,9 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     deleting,
     deletingAll,
     statusUpdating,
+    quotaChecking,
+    invalidChecking,
+    recoveryChecking,
     fileInputRef,
     loadFiles,
     handleUploadClick,
@@ -506,6 +780,9 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions): UseAuthFiles
     handleDeleteAll,
     handleDownload,
     handleStatusToggle,
+    handleDetectCodexLimitAll,
+    handleDetectCodexInvalidDelete,
+    handleDetectCodexRecoveryEnable,
     toggleSelect,
     selectAllVisible,
     deselectAll,
