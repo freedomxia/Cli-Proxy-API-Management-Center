@@ -111,6 +111,7 @@
     "api_keys": "API 密钥",
     "ai_providers": "AI 提供商",
     "auth_files": "认证文件",
+    "plugin_connection": "插件连接",
     "oauth": "OAuth 登录",
     "quota_management": "配额管理",
     "usage_stats": "使用统计",
@@ -1081,6 +1082,22 @@
     "removed": "已过滤",
     "upgrade_required_title": "需要升级 CLI Proxy API",
     "upgrade_required_desc": "当前服务器版本不支持日志查看功能，请升级到最新版本的 CLI Proxy API 以使用此功能。"
+  },
+  "plugin_connection": {
+    "title": "插件连接配置",
+    "connection_interface": "连接接口",
+    "connection_interface_hint": "Chrome扩展插件需要配置此接口地址",
+    "connection_token": "连接Token",
+    "connection_token_placeholder": "留空保存时自动生成随机 token",
+    "connection_token_hint": "用于验证 Chrome 扩展插件的身份，留空将自动生成随机 token",
+    "auto_enable_on_update": "更新token时自动启用",
+    "auto_enable_on_update_hint": "当插件更新token时，如果该token被禁用，则自动启用它",
+    "random": "随机",
+    "save": "保存配置",
+    "save_success": "插件连接配置已保存",
+    "save_failed": "保存插件连接配置失败",
+    "load_failed": "加载插件连接配置失败",
+    "usage_note": "使用说明：安装 Chrome 扩展后，将连接接口和 Token 配置到插件中，插件会自动提取凭证并更新到系统"
   },
   "config_management": {
     "title": "配置面板",

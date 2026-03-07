@@ -111,6 +111,7 @@
     "api_keys": "API Keys",
     "ai_providers": "AI Providers",
     "auth_files": "Auth Files",
+    "plugin_connection": "Plugin Connection",
     "oauth": "OAuth Login",
     "quota_management": "Quota Management",
     "usage_stats": "Usage Statistics",
@@ -1081,6 +1082,22 @@
     "removed": "Filtered",
     "upgrade_required_title": "Please Upgrade CLI Proxy API",
     "upgrade_required_desc": "The current server version does not support the logs viewing feature. Please upgrade to the latest version of CLI Proxy API to use this feature."
+  },
+  "plugin_connection": {
+    "title": "Plugin Connection Settings",
+    "connection_interface": "Connection Endpoint",
+    "connection_interface_hint": "Configure this endpoint URL in the Chrome extension",
+    "connection_token": "Connection Token",
+    "connection_token_placeholder": "Leave blank to generate a random token when saving",
+    "connection_token_hint": "Used to authorize the Chrome extension. Leave blank to auto-generate a random token",
+    "auto_enable_on_update": "Auto-enable when token updates",
+    "auto_enable_on_update_hint": "If a token is disabled, automatically enable it again when the plugin refreshes it",
+    "random": "Random",
+    "save": "Save Settings",
+    "save_success": "Plugin connection settings saved",
+    "save_failed": "Failed to save plugin connection settings",
+    "load_failed": "Failed to load plugin connection settings",
+    "usage_note": "Usage: after installing the Chrome extension, fill in the connection endpoint and token. The extension will automatically extract credentials and push them into the system."
   },
   "config_management": {
     "title": "Config Panel",
