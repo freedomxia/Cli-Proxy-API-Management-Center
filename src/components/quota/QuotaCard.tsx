@@ -143,6 +143,6 @@ const resolveQuotaErrorMessage = (
   fallback: string
 ): string => {
   if (status === 404) return t('common.quota_update_required');
-  if (status === 403) return t('common.quota_check_credential');
+  if (status === 403) return fallback.trim() || t('common.quota_check_credential');
   return fallback;
 };
