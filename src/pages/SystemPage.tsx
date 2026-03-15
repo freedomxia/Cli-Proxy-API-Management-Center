@@ -8,7 +8,7 @@ import { IconGithub, IconBookOpen, IconExternalLink, IconCode } from '@/componen
 import { useAuthStore, useConfigStore, useNotificationStore, useModelsStore, useThemeStore } from '@/stores';
 import { configApi } from '@/services/api';
 import { apiKeysApi } from '@/services/api/apiKeys';
-import { classifyModels } from '@/utils/models';
+import { classifyModels, type ModelInfo } from '@/utils/models';
 import { STORAGE_KEY_AUTH } from '@/utils/constants';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
 import iconGemini from '@/assets/icons/gemini.svg';
@@ -82,6 +82,49 @@ export function SystemPage() {
     if (typeof iconEntry === 'string') return iconEntry;
     return resolvedTheme === 'dark' ? iconEntry.dark : iconEntry.light;
   };
+
+  const formatProviderLabel = useCallback((value?: string | null) => {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    if (!normalized) return '';
+
+    switch (normalized) {
+      case 'openai':
+        return 'OpenAI';
+      case 'notion':
+        return 'Notion';
+      case 'anthropic':
+        return 'Anthropic';
+      case 'google':
+        return 'Google';
+      default:
+        return normalized
+          .split(/[-_\s]+/)
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+    }
+  }, []);
+
+  const buildProviderSummary = useCallback(
+    (items: ModelInfo[]) => {
+      const counts = new Map<string, number>();
+
+      items.forEach((item) => {
+        const label = formatProviderLabel(item.ownedBy || item.type);
+        if (!label) return;
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      });
+
+      return Array.from(counts.entries())
+        .sort((a, b) => {
+          if (b[1] !== a[1]) return b[1] - a[1];
+          return a[0].localeCompare(b[0]);
+        })
+        .map(([label, count]) => `${label} ${count}`)
+        .join(' / ');
+    },
+    [formatProviderLabel]
+  );
 
   const normalizeApiKeyList = (input: unknown): string[] => {
     if (!Array.isArray(input)) return [];
@@ -391,6 +434,7 @@ export function SystemPage() {
           <div className="item-list">
             {groupedModels.map((group) => {
               const iconSrc = getIconForCategory(group.id);
+              const providerSummary = buildProviderSummary(group.items);
               return (
                 <div key={group.id} className="item-row">
                   <div className="item-meta">
@@ -398,16 +442,24 @@ export function SystemPage() {
                       {iconSrc && <img src={iconSrc} alt="" className={styles.groupIcon} />}
                       <span className="item-title">{group.label}</span>
                     </div>
-                    <div className="item-subtitle">{t('system_info.models_count', { count: group.items.length })}</div>
+                    <div className="item-subtitle">
+                      {t('system_info.models_count', { count: group.items.length })}
+                      {providerSummary ? ` · ${providerSummary}` : ''}
+                    </div>
                   </div>
                   <div className={styles.modelTags}>
                     {group.items.map((model) => (
                       <span
-                        key={`${model.name}-${model.alias ?? 'default'}`}
+                        key={`${model.name}-${model.alias ?? 'default'}-${model.ownedBy ?? model.type ?? 'unknown'}`}
                         className={styles.modelTag}
                         title={model.description || ''}
                       >
                         <span className={styles.modelName}>{model.name}</span>
+                        {(model.ownedBy || model.type) && (
+                          <span className={styles.providerBadge}>
+                            {formatProviderLabel(model.ownedBy || model.type)}
+                          </span>
+                        )}
                         {model.alias && <span className={styles.modelAlias}>{model.alias}</span>}
                       </span>
                     ))}

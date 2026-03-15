@@ -6,6 +6,7 @@ import {
   ClaudeSection,
   CodexSection,
   GeminiSection,
+  NotionSection,
   OpenAISection,
   VertexSection,
   ProviderNav,
@@ -18,7 +19,12 @@ import {
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { ampcodeApi, providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore, useThemeStore } from '@/stores';
-import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
+import type {
+  GeminiKeyConfig,
+  NotionKeyConfig,
+  OpenAIProviderConfig,
+  ProviderKeyConfig,
+} from '@/types';
 import styles from './AiProvidersPage.module.scss';
 
 export function AiProvidersPage() {
@@ -46,6 +52,9 @@ export function AiProvidersPage() {
   );
   const [claudeConfigs, setClaudeConfigs] = useState<ProviderKeyConfig[]>(
     () => config?.claudeApiKeys || []
+  );
+  const [notionConfigs, setNotionConfigs] = useState<NotionKeyConfig[]>(
+    () => config?.notionApiKeys || []
   );
   const [vertexConfigs, setVertexConfigs] = useState<ProviderKeyConfig[]>(
     () => config?.vertexApiKeys || []
@@ -88,6 +97,7 @@ export function AiProvidersPage() {
       setGeminiKeys(data?.geminiApiKeys || []);
       setCodexConfigs(data?.codexApiKeys || []);
       setClaudeConfigs(data?.claudeApiKeys || []);
+      setNotionConfigs(data?.notionApiKeys || []);
       setVertexConfigs(data?.vertexApiKeys || []);
       setOpenaiProviders(data?.openaiCompatibility || []);
 
@@ -120,12 +130,14 @@ export function AiProvidersPage() {
     if (config?.geminiApiKeys) setGeminiKeys(config.geminiApiKeys);
     if (config?.codexApiKeys) setCodexConfigs(config.codexApiKeys);
     if (config?.claudeApiKeys) setClaudeConfigs(config.claudeApiKeys);
+    if (config?.notionApiKeys) setNotionConfigs(config.notionApiKeys);
     if (config?.vertexApiKeys) setVertexConfigs(config.vertexApiKeys);
     if (config?.openaiCompatibility) setOpenaiProviders(config.openaiCompatibility);
   }, [
     config?.geminiApiKeys,
     config?.codexApiKeys,
     config?.claudeApiKeys,
+    config?.notionApiKeys,
     config?.vertexApiKeys,
     config?.openaiCompatibility,
   ]);
@@ -135,6 +147,19 @@ export function AiProvidersPage() {
   const openEditor = useCallback(
     (path: string) => {
       navigate(path, { state: { fromAiProviders: true } });
+    },
+    [navigate]
+  );
+
+  const openNotionAuthFiles = useCallback(
+    (openNewEditor = false) => {
+      navigate('/auth-files', {
+        state: {
+          fromAiProviders: true,
+          focusProvider: 'notion',
+          openNewNotionEditor: openNewEditor,
+        },
+      });
     },
     [navigate]
   );
@@ -260,7 +285,9 @@ export function AiProvidersPage() {
     const entry = source[index];
     if (!entry) return;
     showConfirmation({
-      title: t(`ai_providers.${type}_delete_title`, { defaultValue: `Delete ${type === 'codex' ? 'Codex' : 'Claude'} Config` }),
+      title: t(`ai_providers.${type}_delete_title`, {
+        defaultValue: `Delete ${type === 'codex' ? 'Codex' : 'Claude'} Config`,
+      }),
       message: t(`ai_providers.${type}_delete_confirm`),
       variant: 'danger',
       confirmText: t('common.confirm'),
@@ -305,6 +332,70 @@ export function AiProvidersPage() {
           updateConfigValue('vertex-api-key', next);
           clearCache('vertex-api-key');
           showNotification(t('notification.vertex_config_deleted'), 'success');
+        } catch (err: unknown) {
+          const message = getErrorMessage(err);
+          showNotification(`${t('notification.delete_failed')}: ${message}`, 'error');
+        }
+      },
+    });
+  };
+
+  const setNotionEnabled = async (index: number, enabled: boolean) => {
+    const current = notionConfigs[index];
+    if (!current) return;
+
+    const switchingKey = `notion:${current.tokenV2}`;
+    setConfigSwitchingKey(switchingKey);
+
+    const previousList = notionConfigs;
+    const nextExcluded = enabled
+      ? withoutDisableAllModelsRule(current.excludedModels)
+      : withDisableAllModelsRule(current.excludedModels);
+    const nextItem: NotionKeyConfig = { ...current, excludedModels: nextExcluded };
+    const nextList = previousList.map((item, idx) => (idx === index ? nextItem : item));
+
+    setNotionConfigs(nextList);
+    updateConfigValue('notion-api-key', nextList);
+    clearCache('notion-api-key');
+
+    try {
+      await providersApi.saveNotionConfigs(nextList);
+      showNotification(
+        enabled ? t('notification.config_enabled') : t('notification.config_disabled'),
+        'success'
+      );
+    } catch (err: unknown) {
+      const message = getErrorMessage(err);
+      setNotionConfigs(previousList);
+      updateConfigValue('notion-api-key', previousList);
+      clearCache('notion-api-key');
+      showNotification(`${t('notification.update_failed')}: ${message}`, 'error');
+    } finally {
+      setConfigSwitchingKey(null);
+    }
+  };
+
+  const deleteNotion = async (index: number) => {
+    const entry = notionConfigs[index];
+    if (!entry) return;
+    showConfirmation({
+      title: t('ai_providers.notion_delete_title', { defaultValue: 'Delete Notion Account' }),
+      message: t('ai_providers.notion_delete_confirm', {
+        defaultValue: 'Delete this Notion account configuration?',
+      }),
+      variant: 'danger',
+      confirmText: t('common.confirm'),
+      onConfirm: async () => {
+        try {
+          await providersApi.deleteNotionConfig(entry.tokenV2);
+          const next = notionConfigs.filter((_, idx) => idx !== index);
+          setNotionConfigs(next);
+          updateConfigValue('notion-api-key', next);
+          clearCache('notion-api-key');
+          showNotification(
+            t('notification.notion_config_deleted', { defaultValue: 'Notion 配置已删除' }),
+            'success'
+          );
         } catch (err: unknown) {
           const message = getErrorMessage(err);
           showNotification(`${t('notification.delete_failed')}: ${message}`, 'error');
@@ -386,6 +477,22 @@ export function AiProvidersPage() {
             onEdit={(index) => openEditor(`/ai-providers/claude/${index}`)}
             onDelete={(index) => void deleteProviderEntry('claude', index)}
             onToggle={(index, enabled) => void setConfigEnabled('claude', index, enabled)}
+          />
+        </div>
+
+        <div id="provider-notion">
+          <NotionSection
+            configs={notionConfigs}
+            keyStats={keyStats}
+            usageDetails={usageDetails}
+            loading={loading}
+            disableControls={disableControls}
+            isSwitching={isSwitching}
+            onAdd={() => openEditor('/ai-providers/notion/new')}
+            onManageAuthFiles={() => openNotionAuthFiles(false)}
+            onEdit={(index) => openEditor(`/ai-providers/notion/${index}`)}
+            onDelete={deleteNotion}
+            onToggle={(index, enabled) => void setNotionEnabled(index, enabled)}
           />
         </div>
 

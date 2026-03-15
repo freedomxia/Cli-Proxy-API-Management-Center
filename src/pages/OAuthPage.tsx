@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useNotificationStore, useThemeStore } from '@/stores';
-import { oauthApi, type OAuthProvider, type IFlowCookieAuthResponse } from '@/services/api/oauth';
+import {
+  oauthApi,
+  type OAuthProvider,
+  type IFlowCookieAuthResponse,
+  type NotionImportResponse
+} from '@/services/api/oauth';
 import { vertexApi, type VertexImportResponse } from '@/services/api/vertex';
 import { copyToClipboard } from '@/utils/clipboard';
 import styles from './OAuthPage.module.scss';
@@ -17,6 +23,7 @@ import iconKimiLight from '@/assets/icons/kimi-light.svg';
 import iconKimiDark from '@/assets/icons/kimi-dark.svg';
 import iconQwen from '@/assets/icons/qwen.svg';
 import iconIflow from '@/assets/icons/iflow.svg';
+import iconNotion from '@/assets/icons/notion.svg';
 import iconVertex from '@/assets/icons/vertex.svg';
 
 interface ProviderState {
@@ -39,6 +46,16 @@ interface IFlowCookieState {
   result?: IFlowCookieAuthResponse;
   error?: string;
   errorType?: 'error' | 'warning';
+}
+
+interface NotionImportState {
+  tokenV2: string;
+  baseUrl: string;
+  prefix: string;
+  extractedText: string;
+  loading: boolean;
+  result?: NotionImportResponse;
+  error?: string;
 }
 
 interface VertexImportResult {
@@ -72,6 +89,13 @@ function getErrorStatus(error: unknown): number | undefined {
   return typeof error.status === 'number' ? error.status : undefined;
 }
 
+function getFileNameFromPath(path?: string): string {
+  const normalized = String(path ?? '').trim();
+  if (!normalized) return '';
+  const parts = normalized.split(/[\\/]/).filter(Boolean);
+  return parts.length > 0 ? parts[parts.length - 1] : '';
+}
+
 const PROVIDERS: { id: OAuthProvider; titleKey: string; hintKey: string; urlLabelKey: string; icon: string | { light: string; dark: string } }[] = [
   { id: 'codex', titleKey: 'auth_login.codex_oauth_title', hintKey: 'auth_login.codex_oauth_hint', urlLabelKey: 'auth_login.codex_oauth_url_label', icon: { light: iconCodexLight, dark: iconCodexDark } },
   { id: 'anthropic', titleKey: 'auth_login.anthropic_oauth_title', hintKey: 'auth_login.anthropic_oauth_hint', urlLabelKey: 'auth_login.anthropic_oauth_url_label', icon: iconClaude },
@@ -86,16 +110,55 @@ const getProviderI18nPrefix = (provider: OAuthProvider) => provider.replace('-',
 const getAuthKey = (provider: OAuthProvider, suffix: string) =>
   `auth_login.${getProviderI18nPrefix(provider)}_${suffix}`;
 
+const NOTION_EXTRACT_SCRIPT = String.raw`(async () => {
+  const token_v2 = prompt('Paste token_v2 from Cookies', '') || '';
+  const response = await fetch('/api/v3/loadUserContent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+    credentials: 'include'
+  });
+  const data = await response.json();
+  const pick = (obj) => Object.keys(obj || {})[0] || '';
+  const user_id = pick(data.recordMap?.notion_user);
+  const space_id = pick(data.recordMap?.space);
+  const space_view_id = pick(data.recordMap?.space_view);
+  const user = data.recordMap?.notion_user?.[user_id]?.value || {};
+  const payload = {
+    token_v2,
+    space_id,
+    user_id,
+    space_view_id,
+    user_name: user.given_name || user.name || '',
+    user_email: user.email || ''
+  };
+  const text = JSON.stringify(payload, null, 2);
+  console.log(text);
+  await navigator.clipboard.writeText(text);
+  alert('Copied Notion JSON to clipboard');
+})().catch((error) => {
+  console.error(error);
+  alert(error instanceof Error ? error.message : 'Failed to extract Notion info');
+});`;
+
 const getIcon = (icon: string | { light: string; dark: string }, theme: 'light' | 'dark') => {
   return typeof icon === 'string' ? icon : icon[theme];
 };
 
 export function OAuthPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { showNotification } = useNotificationStore();
   const resolvedTheme = useThemeStore((state) => state.resolvedTheme);
   const [states, setStates] = useState<Record<OAuthProvider, ProviderState>>({} as Record<OAuthProvider, ProviderState>);
   const [iflowCookie, setIflowCookie] = useState<IFlowCookieState>({ cookie: '', loading: false });
+  const [notionState, setNotionState] = useState<NotionImportState>({
+    tokenV2: '',
+    baseUrl: '',
+    prefix: '',
+    extractedText: '',
+    loading: false
+  });
   const [vertexState, setVertexState] = useState<VertexImportState>({
     fileName: '',
     location: '',
@@ -279,6 +342,74 @@ export function OAuthPage() {
     }
   };
 
+  const copyNotionExtractScript = async () => {
+    const copied = await copyToClipboard(NOTION_EXTRACT_SCRIPT);
+    showNotification(
+      t(copied ? 'notification.link_copied' : 'notification.copy_failed'),
+      copied ? 'success' : 'error'
+    );
+  };
+
+  const openNotionAI = () => {
+    window.open('https://www.notion.so/ai', '_blank', 'noopener,noreferrer');
+  };
+
+  const submitNotionImport = async () => {
+    const tokenV2 = notionState.tokenV2.trim();
+    const extractedText = notionState.extractedText.trim();
+    if (!tokenV2 && !extractedText) {
+      const message = t('auth_login.notion_import_required', {
+        defaultValue: '请先填写 token_v2，或粘贴提取脚本输出。'
+      });
+      setNotionState((prev) => ({ ...prev, error: message }));
+      showNotification(message, 'warning');
+      return;
+    }
+
+    setNotionState((prev) => ({
+      ...prev,
+      loading: true,
+      error: undefined,
+      result: undefined
+    }));
+
+    try {
+      const result = await oauthApi.notionImport({
+        token_v2: tokenV2 || undefined,
+        base_url: notionState.baseUrl.trim() || undefined,
+        prefix: notionState.prefix.trim() || undefined,
+        extracted_text: extractedText || undefined
+      });
+      setNotionState((prev) => ({
+        ...prev,
+        loading: false,
+        result
+      }));
+      const authFileName = getFileNameFromPath(result.saved_path);
+      showNotification(
+        t('auth_login.notion_import_success', {
+          defaultValue: 'Notion 凭证已保存。'
+        }),
+        'success'
+      );
+      navigate('/auth-files', {
+        state: {
+          focusProvider: 'notion',
+          focusAuthName: authFileName || undefined,
+          fromNotionImport: true
+        }
+      });
+    } catch (err: unknown) {
+      const message = getErrorMessage(err) || t('notification.upload_failed');
+      setNotionState((prev) => ({
+        ...prev,
+        loading: false,
+        error: message
+      }));
+      showNotification(message, 'error');
+    }
+  };
+
   const handleVertexFilePick = () => {
     vertexFileInputRef.current?.click();
   };
@@ -453,6 +584,211 @@ export function OAuthPage() {
             </div>
           );
         })}
+
+        {/* Vertex JSON 登录 */}
+        <Card
+          title={
+            <span className={styles.cardTitle}>
+              <img src={iconNotion} alt="" className={styles.cardTitleIcon} />
+              {t('auth_login.notion_import_title', { defaultValue: 'Notion 登录导入' })}
+            </span>
+          }
+          extra={
+            <Button onClick={submitNotionImport} loading={notionState.loading}>
+              {t('auth_login.notion_import_button', { defaultValue: '导入凭证' })}
+            </Button>
+          }
+        >
+          <div className={styles.cardContent}>
+            <div className={styles.cardHint}>
+              {t('auth_login.notion_import_hint', {
+                defaultValue:
+                  '先打开 Notion AI 页面，再从浏览器 Cookies 复制 token_v2。若你想一次拿到 space_id 和 user_id，可以在页面 Console 执行提取脚本。'
+              })}
+            </div>
+            <div className={styles.cardHintSecondary}>
+              {t('auth_login.notion_import_secondary_hint', {
+                defaultValue:
+                  '后端会优先用 token_v2 自动探测账号信息；粘贴脚本输出只作为兜底或校对。'
+              })}
+            </div>
+            <div className={styles.actionRow}>
+              <Button variant="secondary" size="sm" onClick={openNotionAI}>
+                {t('auth_login.notion_import_open', { defaultValue: '打开 Notion AI' })}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={copyNotionExtractScript}>
+                {t('auth_login.notion_import_copy_script', { defaultValue: '复制提取脚本' })}
+              </Button>
+            </div>
+            <Input
+              label={t('auth_login.notion_import_token_label', { defaultValue: 'token_v2' })}
+              hint={t('auth_login.notion_import_token_hint', {
+                defaultValue: '从浏览器开发者工具 Application -> Cookies -> token_v2 获取。'
+              })}
+              value={notionState.tokenV2}
+              onChange={(e) =>
+                setNotionState((prev) => ({
+                  ...prev,
+                  tokenV2: e.target.value,
+                  error: undefined
+                }))
+              }
+              placeholder={t('auth_login.notion_import_token_placeholder', {
+                defaultValue: 'Paste token_v2 from Notion cookies'
+              })}
+              className={styles.monoInput}
+            />
+            <Input
+              label={t('auth_login.notion_import_prefix_label', { defaultValue: 'Prefix（可选）' })}
+              hint={t('auth_login.notion_import_prefix_hint', {
+                defaultValue: '用于多账号路由，例如 notion-team。不要包含 /。'
+              })}
+              value={notionState.prefix}
+              onChange={(e) =>
+                setNotionState((prev) => ({
+                  ...prev,
+                  prefix: e.target.value,
+                  error: undefined
+                }))
+              }
+              placeholder={t('auth_login.notion_import_prefix_placeholder', {
+                defaultValue: 'notion-team'
+              })}
+            />
+            <Input
+              label={t('auth_login.notion_import_base_url_label', { defaultValue: 'Base URL（可选）' })}
+              hint={t('auth_login.notion_import_base_url_hint', {
+                defaultValue: '默认 https://www.notion.so。只有自定义域名或本地调试时才需要填写。'
+              })}
+              value={notionState.baseUrl}
+              onChange={(e) =>
+                setNotionState((prev) => ({
+                  ...prev,
+                  baseUrl: e.target.value,
+                  error: undefined
+                }))
+              }
+              placeholder={t('auth_login.notion_import_base_url_placeholder', {
+                defaultValue: 'https://www.notion.so'
+              })}
+            />
+            <div className={styles.formItem}>
+              <label className={styles.formItemLabel}>
+                {t('auth_login.notion_import_extracted_label', {
+                  defaultValue: '提取脚本输出（可选）'
+                })}
+              </label>
+              <textarea
+                className={`input ${styles.textarea}`.trim()}
+                rows={7}
+                value={notionState.extractedText}
+                onChange={(e) =>
+                  setNotionState((prev) => ({
+                    ...prev,
+                    extractedText: e.target.value,
+                    error: undefined
+                  }))
+                }
+                placeholder={t('auth_login.notion_import_extracted_placeholder', {
+                  defaultValue:
+                    'Paste JSON object or NOTION_ACCOUNTS=[...] here if auto-discovery is unavailable.'
+                })}
+              />
+              <div className={styles.cardHintSecondary}>
+                {t('auth_login.notion_import_extracted_hint', {
+                  defaultValue:
+                    '支持直接粘贴 JSON 对象，或粘贴 NOTION_ACCOUNTS=\'[...]\' 这一整段。'
+                })}
+              </div>
+            </div>
+            {notionState.error && <div className="status-badge error">{notionState.error}</div>}
+            {notionState.result && (
+              <div className={styles.connectionBox}>
+                <div className={styles.connectionLabel}>
+                  {t('auth_login.notion_import_result_title', { defaultValue: '导入结果' })}
+                </div>
+                <div className={styles.keyValueList}>
+                  {notionState.result.user_name && (
+                    <div className={styles.keyValueItem}>
+                      <span className={styles.keyValueKey}>
+                        {t('auth_login.notion_import_result_name', { defaultValue: '用户名称' })}
+                      </span>
+                      <span className={styles.keyValueValue}>{notionState.result.user_name}</span>
+                    </div>
+                  )}
+                  {notionState.result.user_email && (
+                    <div className={styles.keyValueItem}>
+                      <span className={styles.keyValueKey}>
+                        {t('auth_login.notion_import_result_email', { defaultValue: '邮箱' })}
+                      </span>
+                      <span className={styles.keyValueValue}>{notionState.result.user_email}</span>
+                    </div>
+                  )}
+                  {notionState.result.user_id && (
+                    <div className={styles.keyValueItem}>
+                      <span className={styles.keyValueKey}>
+                        {t('auth_login.notion_import_result_user_id', { defaultValue: 'user_id' })}
+                      </span>
+                      <span className={styles.keyValueValue}>{notionState.result.user_id}</span>
+                    </div>
+                  )}
+                  {notionState.result.space_id && (
+                    <div className={styles.keyValueItem}>
+                      <span className={styles.keyValueKey}>
+                        {t('auth_login.notion_import_result_space_id', { defaultValue: 'space_id' })}
+                      </span>
+                      <span className={styles.keyValueValue}>{notionState.result.space_id}</span>
+                    </div>
+                  )}
+                  {notionState.result.space_view_id && (
+                    <div className={styles.keyValueItem}>
+                      <span className={styles.keyValueKey}>
+                        {t('auth_login.notion_import_result_space_view_id', {
+                          defaultValue: 'space_view_id'
+                        })}
+                      </span>
+                      <span className={styles.keyValueValue}>{notionState.result.space_view_id}</span>
+                    </div>
+                  )}
+                  {notionState.result.base_url && (
+                    <div className={styles.keyValueItem}>
+                      <span className={styles.keyValueKey}>
+                        {t('auth_login.notion_import_result_base_url', { defaultValue: 'Base URL' })}
+                      </span>
+                      <span className={styles.keyValueValue}>{notionState.result.base_url}</span>
+                    </div>
+                  )}
+                  {notionState.result.prefix && (
+                    <div className={styles.keyValueItem}>
+                      <span className={styles.keyValueKey}>
+                        {t('auth_login.notion_import_result_prefix', { defaultValue: 'Prefix' })}
+                      </span>
+                      <span className={styles.keyValueValue}>{notionState.result.prefix}</span>
+                    </div>
+                  )}
+                  {notionState.result.saved_path && (
+                    <div className={styles.keyValueItem}>
+                      <span className={styles.keyValueKey}>
+                        {t('auth_login.notion_import_result_file', { defaultValue: '保存路径' })}
+                      </span>
+                      <span className={styles.keyValueValue}>{notionState.result.saved_path}</span>
+                    </div>
+                  )}
+                  <div className={styles.keyValueItem}>
+                    <span className={styles.keyValueKey}>
+                      {t('auth_login.notion_import_result_mode', { defaultValue: '处理方式' })}
+                    </span>
+                    <span className={styles.keyValueValue}>
+                      {notionState.result.created
+                        ? t('auth_login.notion_import_result_created', { defaultValue: '新建凭证文件' })
+                        : t('auth_login.notion_import_result_updated', { defaultValue: '更新已有凭证文件' })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
 
         {/* Vertex JSON 登录 */}
         <Card

@@ -1300,7 +1300,7 @@
     "not_loaded": "Not Loaded",
     "seconds_ago": "seconds ago",
     "models_title": "Available Models",
-    "models_desc": "Shows the /models response and uses saved API keys for auth automatically.",
+    "models_desc": "Shows the currently routable /v1/models list from the proxy and labels each model source provider.",
     "models_loading": "Loading available models...",
     "models_empty": "No models returned by /models",
     "models_error": "Failed to load model list",

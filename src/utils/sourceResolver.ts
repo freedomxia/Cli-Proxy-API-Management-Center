@@ -1,10 +1,16 @@
-import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';
+import type {
+  GeminiKeyConfig,
+  NotionKeyConfig,
+  OpenAIProviderConfig,
+  ProviderKeyConfig,
+} from '@/types';
 import type { CredentialInfo, SourceInfo } from '@/types/sourceInfo';
 import { buildCandidateUsageSourceIds, normalizeAuthIndex } from '@/utils/usage';
 
 export interface SourceInfoMapInput {
   geminiApiKeys?: GeminiKeyConfig[];
   claudeApiKeys?: ProviderKeyConfig[];
+  notionApiKeys?: NotionKeyConfig[];
   codexApiKeys?: ProviderKeyConfig[];
   vertexApiKeys?: ProviderKeyConfig[];
   openaiCompatibility?: OpenAIProviderConfig[];
@@ -29,6 +35,12 @@ export function buildSourceInfoMap(input: SourceInfoMapInput): Map<string, Sourc
   }> = [
     { items: input.geminiApiKeys || [], type: 'gemini', label: 'Gemini' },
     { items: input.claudeApiKeys || [], type: 'claude', label: 'Claude' },
+    {
+      items:
+        input.notionApiKeys?.map((item) => ({ apiKey: item.tokenV2, prefix: item.prefix })) || [],
+      type: 'notion',
+      label: 'Notion',
+    },
     { items: input.codexApiKeys || [], type: 'codex', label: 'Codex' },
     { items: input.vertexApiKeys || [], type: 'vertex', label: 'Vertex' },
   ];

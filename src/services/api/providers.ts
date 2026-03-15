@@ -5,18 +5,21 @@
 import { apiClient } from './client';
 import {
   normalizeGeminiKeyConfig,
+  normalizeNotionKeyConfig,
   normalizeOpenAIProvider,
-  normalizeProviderKeyConfig
+  normalizeProviderKeyConfig,
 } from './transformers';
 import type {
   GeminiKeyConfig,
+  NotionKeyConfig,
   OpenAIProviderConfig,
   ProviderKeyConfig,
   ApiKeyEntry,
-  ModelAlias
+  ModelAlias,
 } from '@/types';
 
-const serializeHeaders = (headers?: Record<string, string>) => (headers && Object.keys(headers).length ? headers : undefined);
+const serializeHeaders = (headers?: Record<string, string>) =>
+  headers && Object.keys(headers).length ? headers : undefined;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -74,7 +77,8 @@ const serializeProviderKey = (config: ProviderKeyConfig) => {
     const cloakPayload: Record<string, unknown> = {};
     const mode = config.cloak.mode?.trim();
     if (mode) cloakPayload.mode = mode;
-    if (config.cloak.strictMode !== undefined) cloakPayload['strict-mode'] = config.cloak.strictMode;
+    if (config.cloak.strictMode !== undefined)
+      cloakPayload['strict-mode'] = config.cloak.strictMode;
     if (config.cloak.sensitiveWords && config.cloak.sensitiveWords.length) {
       cloakPayload['sensitive-words'] = config.cloak.sensitiveWords;
     }
@@ -132,7 +136,7 @@ const serializeOpenAIProvider = (provider: OpenAIProviderConfig) => {
     'base-url': provider.baseUrl,
     'api-key-entries': Array.isArray(provider.apiKeyEntries)
       ? provider.apiKeyEntries.map((entry) => serializeApiKeyEntry(entry))
-      : []
+      : [],
   };
   if (provider.prefix?.trim()) payload.prefix = provider.prefix.trim();
   const headers = serializeHeaders(provider.headers);
@@ -144,6 +148,26 @@ const serializeOpenAIProvider = (provider: OpenAIProviderConfig) => {
   return payload;
 };
 
+const serializeNotionKey = (config: NotionKeyConfig) => {
+  const payload: Record<string, unknown> = {
+    'token-v2': config.tokenV2,
+    'space-id': config.spaceId,
+    'user-id': config.userId,
+  };
+  if (config.priority !== undefined) payload.priority = config.priority;
+  if (config.prefix?.trim()) payload.prefix = config.prefix.trim();
+  if (config.baseUrl) payload['base-url'] = config.baseUrl;
+  if (config.proxyUrl) payload['proxy-url'] = config.proxyUrl;
+  const headers = serializeHeaders(config.headers);
+  if (headers) payload.headers = headers;
+  const models = serializeModelAliases(config.models);
+  if (models && models.length) payload.models = models;
+  if (config.excludedModels && config.excludedModels.length) {
+    payload['excluded-models'] = config.excludedModels;
+  }
+  return payload;
+};
+
 export const providersApi = {
   async getGeminiKeys(): Promise<GeminiKeyConfig[]> {
     const data = await apiClient.get('/gemini-api-key');
@@ -152,7 +176,10 @@ export const providersApi = {
   },
 
   saveGeminiKeys: (configs: GeminiKeyConfig[]) =>
-    apiClient.put('/gemini-api-key', configs.map((item) => serializeGeminiKey(item))),
+    apiClient.put(
+      '/gemini-api-key',
+      configs.map((item) => serializeGeminiKey(item))
+    ),
 
   updateGeminiKey: (index: number, value: GeminiKeyConfig) =>
     apiClient.patch('/gemini-api-key', { index, value: serializeGeminiKey(value) }),
@@ -163,11 +190,16 @@ export const providersApi = {
   async getCodexConfigs(): Promise<ProviderKeyConfig[]> {
     const data = await apiClient.get('/codex-api-key');
     const list = extractArrayPayload(data, 'codex-api-key');
-    return list.map((item) => normalizeProviderKeyConfig(item)).filter(Boolean) as ProviderKeyConfig[];
+    return list
+      .map((item) => normalizeProviderKeyConfig(item))
+      .filter(Boolean) as ProviderKeyConfig[];
   },
 
   saveCodexConfigs: (configs: ProviderKeyConfig[]) =>
-    apiClient.put('/codex-api-key', configs.map((item) => serializeProviderKey(item))),
+    apiClient.put(
+      '/codex-api-key',
+      configs.map((item) => serializeProviderKey(item))
+    ),
 
   updateCodexConfig: (index: number, value: ProviderKeyConfig) =>
     apiClient.patch('/codex-api-key', { index, value: serializeProviderKey(value) }),
@@ -178,11 +210,16 @@ export const providersApi = {
   async getClaudeConfigs(): Promise<ProviderKeyConfig[]> {
     const data = await apiClient.get('/claude-api-key');
     const list = extractArrayPayload(data, 'claude-api-key');
-    return list.map((item) => normalizeProviderKeyConfig(item)).filter(Boolean) as ProviderKeyConfig[];
+    return list
+      .map((item) => normalizeProviderKeyConfig(item))
+      .filter(Boolean) as ProviderKeyConfig[];
   },
 
   saveClaudeConfigs: (configs: ProviderKeyConfig[]) =>
-    apiClient.put('/claude-api-key', configs.map((item) => serializeProviderKey(item))),
+    apiClient.put(
+      '/claude-api-key',
+      configs.map((item) => serializeProviderKey(item))
+    ),
 
   updateClaudeConfig: (index: number, value: ProviderKeyConfig) =>
     apiClient.patch('/claude-api-key', { index, value: serializeProviderKey(value) }),
@@ -190,14 +227,37 @@ export const providersApi = {
   deleteClaudeConfig: (apiKey: string) =>
     apiClient.delete(`/claude-api-key?api-key=${encodeURIComponent(apiKey)}`),
 
+  async getNotionConfigs(): Promise<NotionKeyConfig[]> {
+    const data = await apiClient.get('/notion-api-key');
+    const list = extractArrayPayload(data, 'notion-api-key');
+    return list.map((item) => normalizeNotionKeyConfig(item)).filter(Boolean) as NotionKeyConfig[];
+  },
+
+  saveNotionConfigs: (configs: NotionKeyConfig[]) =>
+    apiClient.put(
+      '/notion-api-key',
+      configs.map((item) => serializeNotionKey(item))
+    ),
+
+  updateNotionConfig: (index: number, value: NotionKeyConfig) =>
+    apiClient.patch('/notion-api-key', { index, value: serializeNotionKey(value) }),
+
+  deleteNotionConfig: (tokenV2: string) =>
+    apiClient.delete(`/notion-api-key?token-v2=${encodeURIComponent(tokenV2)}`),
+
   async getVertexConfigs(): Promise<ProviderKeyConfig[]> {
     const data = await apiClient.get('/vertex-api-key');
     const list = extractArrayPayload(data, 'vertex-api-key');
-    return list.map((item) => normalizeProviderKeyConfig(item)).filter(Boolean) as ProviderKeyConfig[];
+    return list
+      .map((item) => normalizeProviderKeyConfig(item))
+      .filter(Boolean) as ProviderKeyConfig[];
   },
 
   saveVertexConfigs: (configs: ProviderKeyConfig[]) =>
-    apiClient.put('/vertex-api-key', configs.map((item) => serializeVertexKey(item))),
+    apiClient.put(
+      '/vertex-api-key',
+      configs.map((item) => serializeVertexKey(item))
+    ),
 
   updateVertexConfig: (index: number, value: ProviderKeyConfig) =>
     apiClient.patch('/vertex-api-key', { index, value: serializeVertexKey(value) }),
@@ -208,15 +268,20 @@ export const providersApi = {
   async getOpenAIProviders(): Promise<OpenAIProviderConfig[]> {
     const data = await apiClient.get('/openai-compatibility');
     const list = extractArrayPayload(data, 'openai-compatibility');
-    return list.map((item) => normalizeOpenAIProvider(item)).filter(Boolean) as OpenAIProviderConfig[];
+    return list
+      .map((item) => normalizeOpenAIProvider(item))
+      .filter(Boolean) as OpenAIProviderConfig[];
   },
 
   saveOpenAIProviders: (providers: OpenAIProviderConfig[]) =>
-    apiClient.put('/openai-compatibility', providers.map((item) => serializeOpenAIProvider(item))),
+    apiClient.put(
+      '/openai-compatibility',
+      providers.map((item) => serializeOpenAIProvider(item))
+    ),
 
   updateOpenAIProvider: (index: number, value: OpenAIProviderConfig) =>
     apiClient.patch('/openai-compatibility', { index, value: serializeOpenAIProvider(value) }),
 
   deleteOpenAIProvider: (name: string) =>
-    apiClient.delete(`/openai-compatibility?name=${encodeURIComponent(name)}`)
+    apiClient.delete(`/openai-compatibility?name=${encodeURIComponent(name)}`),
 };

@@ -7,6 +7,8 @@ export interface ModelInfo {
   name: string;
   alias?: string;
   description?: string;
+  ownedBy?: string;
+  type?: string;
 }
 
 const MODEL_CATEGORIES = [
@@ -46,12 +48,20 @@ export function normalizeModelList(payload: unknown, { dedupe = false } = {}): M
 
     const alias = entry.alias || entry.display_name || entry.displayName;
     const description = entry.description || entry.note || entry.comment;
+    const ownedBy = entry.owned_by || entry.ownedBy || entry.provider || entry.provider_name;
+    const type = entry.type || entry.providerType;
     const model: ModelInfo = { name: String(name) };
     if (alias && alias !== name) {
       model.alias = String(alias);
     }
     if (description) {
       model.description = String(description);
+    }
+    if (ownedBy) {
+      model.ownedBy = String(ownedBy);
+    }
+    if (type) {
+      model.type = String(type);
     }
     return model;
   };
@@ -76,10 +86,12 @@ export function normalizeModelList(payload: unknown, { dedupe = false } = {}): M
   const seen = new Set<string>();
   return normalized.filter((model) => {
     const key = (model?.name || '').toLowerCase();
-    if (!key || seen.has(key)) {
+    const provider = (model?.ownedBy || model?.type || '').toLowerCase();
+    const dedupeKey = `${provider}::${key}`;
+    if (!key || seen.has(dedupeKey)) {
       return false;
     }
-    seen.add(key);
+    seen.add(dedupeKey);
     return true;
   });
 }

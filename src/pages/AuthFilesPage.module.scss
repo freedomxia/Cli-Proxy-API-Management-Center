@@ -65,6 +65,41 @@
   margin-bottom: $spacing-md;
 }
 
+.focusNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-md;
+  padding: $spacing-md;
+  margin-bottom: $spacing-md;
+  border-radius: $radius-md;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary-color) 10%, var(--bg-primary)) 0%,
+      var(--bg-primary) 65%
+    );
+
+  @include mobile {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.focusNoticeText {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.focusNoticeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-sm;
+  justify-content: flex-end;
+}
+
 // 筛选区域
 .filterSection {
   display: flex;
@@ -511,6 +546,18 @@
   }
 }
 
+.fileCardHighlighted {
+  border-color: color-mix(in srgb, var(--primary-color) 72%, var(--border-color));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--primary-color) 55%, transparent),
+    0 0 0 8px color-mix(in srgb, var(--primary-color) 12%, transparent);
+  animation: authFileHighlightPulse 1.4s ease 2;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--primary-color) 80%, var(--border-color));
+  }
+}
+
 .fileCardDisabled {
   opacity: 0.6;
 
@@ -617,6 +664,24 @@
   border-radius: $radius-sm;
   padding: 5px 8px;
   word-break: break-word;
+}
+
+@keyframes authFileHighlightPulse {
+  0% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--primary-color) 55%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--primary-color) 0%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--primary-color) 55%, transparent),
+      0 0 0 10px color-mix(in srgb, var(--primary-color) 16%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--primary-color) 55%, transparent),
+      0 0 0 8px color-mix(in srgb, var(--primary-color) 12%, transparent);
+  }
 }
 
 .cardStats {

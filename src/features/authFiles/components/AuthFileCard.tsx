@@ -34,6 +34,8 @@ const HEALTHY_STATUS_MESSAGES = new Set(['ok', 'healthy', 'ready', 'success', 'a
 export type AuthFileCardProps = {
   file: AuthFileItem;
   selected: boolean;
+  highlighted?: boolean;
+  cardRef?: (node: HTMLDivElement | null) => void;
   resolvedTheme: ResolvedTheme;
   disableControls: boolean;
   deleting: string | null;
@@ -61,6 +63,8 @@ export function AuthFileCard(props: AuthFileCardProps) {
   const {
     file,
     selected,
+    highlighted = false,
+    cardRef,
     resolvedTheme,
     disableControls,
     deleting,
@@ -109,7 +113,8 @@ export function AuthFileCard(props: AuthFileCardProps) {
 
   return (
     <div
-      className={`${styles.fileCard} ${providerCardClass} ${selected ? styles.fileCardSelected : ''} ${file.disabled ? styles.fileCardDisabled : ''}`}
+      ref={cardRef}
+      className={`${styles.fileCard} ${providerCardClass} ${selected ? styles.fileCardSelected : ''} ${highlighted ? styles.fileCardHighlighted : ''} ${file.disabled ? styles.fileCardDisabled : ''}`}
     >
       <div className={styles.fileCardLayout}>
         <div className={styles.fileCardMain}>

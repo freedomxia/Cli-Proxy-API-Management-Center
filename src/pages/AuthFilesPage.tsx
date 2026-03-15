@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { animate } from 'motion/mini';
 import type { AnimationPlaybackControlsWithThen } from 'motion-dom';
 import { useInterval } from '@/hooks/useInterval';
@@ -56,6 +56,14 @@ const easePower2In = (progress: number) => progress ** 3;
 const BATCH_BAR_BASE_TRANSFORM = 'translateX(-50%)';
 const BATCH_BAR_HIDDEN_TRANSFORM = 'translateX(-50%) translateY(56px)';
 
+type AuthFilesLocationState = {
+  fromAiProviders?: boolean;
+  focusProvider?: string;
+  openNewNotionEditor?: boolean;
+  focusAuthName?: string;
+  fromNotionImport?: boolean;
+} | null;
+
 export function AuthFilesPage() {
   const { t } = useTranslation();
   const showNotification = useNotificationStore((state) => state.showNotification);
@@ -64,6 +72,7 @@ export function AuthFilesPage() {
   const pageTransitionLayer = usePageTransitionLayer();
   const isCurrentLayer = pageTransitionLayer ? pageTransitionLayer.status === 'current' : true;
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [filter, setFilter] = useState<'all' | string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
@@ -79,6 +88,14 @@ export function AuthFilesPage() {
   const batchActionAnimationRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
   const previousSelectionCountRef = useRef(0);
   const selectionCountRef = useRef(0);
+  const consumedRouteStateKeyRef = useRef<string | null>(null);
+  const authCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [focusedAuthName, setFocusedAuthName] = useState<string | null>(null);
+  const [highlightedAuthName, setHighlightedAuthName] = useState<string | null>(null);
+  const [focusNotice, setFocusNotice] = useState<{
+    fileName: string;
+    fromNotionImport: boolean;
+  } | null>(null);
 
   const { keyStats, usageDetails, loadKeyStats, refreshKeyStats } = useAuthFilesStats();
   const {
@@ -146,7 +163,9 @@ export function AuthFilesPage() {
     prefixProxyEditor,
     prefixProxyUpdatedText,
     prefixProxyDirty,
+    prefixProxyValidationError,
     openPrefixProxyEditor,
+    openNewNotionEditor,
     closePrefixProxyEditor,
     handlePrefixProxyChange,
     handlePrefixProxySave,
@@ -154,6 +173,7 @@ export function AuthFilesPage() {
     disableControls: connectionStatus !== 'connected',
     loadFiles,
     loadKeyStats: refreshKeyStats,
+    existingFileNames: files.map((file) => file.name),
   });
 
   const disableControls = connectionStatus !== 'connected';
@@ -188,6 +208,64 @@ export function AuthFilesPage() {
   useEffect(() => {
     writeAuthFilesUiState({ filter, statusFilter, search, page, pageSize });
   }, [filter, statusFilter, search, page, pageSize]);
+
+  useEffect(() => {
+    const state = location.state as AuthFilesLocationState;
+    if (!state?.focusProvider && !state?.openNewNotionEditor && !state?.focusAuthName) return;
+    if (consumedRouteStateKeyRef.current === location.key) return;
+
+    consumedRouteStateKeyRef.current = location.key;
+
+    const nextProvider = state.focusProvider?.trim();
+    if (nextProvider) {
+      setFilter(nextProvider);
+      setSearch('');
+      setStatusFilter('all');
+      setPage(1);
+    }
+    if (state.focusAuthName) {
+      const fileName = state.focusAuthName.trim();
+      if (fileName) {
+        setFocusedAuthName(fileName);
+        setHighlightedAuthName(fileName);
+        setFocusNotice({
+          fileName,
+          fromNotionImport: state.fromNotionImport === true,
+        });
+      }
+    }
+    if (state.openNewNotionEditor) {
+      openNewNotionEditor();
+    }
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+      },
+      {
+        replace: true,
+        state: null,
+      }
+    );
+  }, [
+    location.key,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+    openNewNotionEditor,
+  ]);
+
+  useEffect(() => {
+    if (!highlightedAuthName) return;
+
+    const timer = window.setTimeout(() => {
+      setHighlightedAuthName((current) => (current === highlightedAuthName ? null : current));
+    }, 4200);
+
+    return () => window.clearTimeout(timer);
+  }, [highlightedAuthName]);
 
   useEffect(() => {
     setPageSizeInput(String(pageSize));
@@ -285,6 +363,28 @@ export function AuthFilesPage() {
     });
   }, [files, filter, search, statusFilter]);
 
+  useEffect(() => {
+    if (!focusedAuthName) return;
+
+    const targetIndex = filtered.findIndex((file) => file.name === focusedAuthName);
+    if (targetIndex < 0) return;
+
+    const targetPage = Math.floor(targetIndex / pageSize) + 1;
+    if (page !== targetPage) {
+      setPage(targetPage);
+      return;
+    }
+
+    const node = authCardRefs.current[focusedAuthName];
+    if (!node) return;
+
+    node.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+    setFocusedAuthName(null);
+  }, [filtered, focusedAuthName, page, pageSize]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * pageSize;
@@ -294,6 +394,10 @@ export function AuthFilesPage() {
     [pageItems]
   );
   const selectedNames = useMemo(() => Array.from(selectedFiles), [selectedFiles]);
+  const focusedAuthFile = useMemo(
+    () => (focusNotice ? files.find((file) => file.name === focusNotice.fileName) ?? null : null),
+    [files, focusNotice]
+  );
 
   const showDetails = (file: AuthFileItem) => {
     setSelectedFile(file);
@@ -518,6 +622,14 @@ export function AuthFilesPage() {
               {t('auth_files.invalid_detect_button')}
             </Button>
             <Button
+              variant="secondary"
+              size="sm"
+              onClick={openNewNotionEditor}
+              disabled={disableControls || uploading}
+            >
+              {t('auth_files.add_notion_button', { defaultValue: '新增 Notion 凭证' })}
+            </Button>
+            <Button
               size="sm"
               onClick={handleUploadClick}
               disabled={disableControls || uploading}
@@ -550,6 +662,53 @@ export function AuthFilesPage() {
         }
       >
         {error && <div className={styles.errorBox}>{error}</div>}
+        {focusNotice && (
+          <div className={styles.focusNotice}>
+            <div className={styles.focusNoticeText}>
+              {focusNotice.fromNotionImport
+                ? t('auth_files.focus_notice_notion', {
+                    defaultValue:
+                      '已定位刚导入的 Notion 凭证 {{name}}，你现在可以继续编辑 prefix、headers 或查看详情。',
+                    name: focusNotice.fileName,
+                  })
+                : t('auth_files.focus_notice_generic', {
+                    defaultValue: '已定位凭证 {{name}}。',
+                    name: focusNotice.fileName,
+                  })}
+            </div>
+            <div className={styles.focusNoticeActions}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (!focusedAuthFile) return;
+                  void openPrefixProxyEditor(focusedAuthFile);
+                }}
+                disabled={disableControls || !focusedAuthFile}
+              >
+                {t('auth_files.focus_notice_edit', { defaultValue: '编辑这个凭证' })}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (!focusedAuthFile) return;
+                  showDetails(focusedAuthFile);
+                }}
+                disabled={disableControls || !focusedAuthFile}
+              >
+                {t('auth_files.focus_notice_details', { defaultValue: '查看详情' })}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setFocusNotice(null)}
+              >
+                {t('common.close', { defaultValue: '关闭' })}
+              </Button>
+            </div>
+          </div>
+        )}
 
         <div className={styles.filterSection}>
           {renderFilterTags()}
@@ -573,7 +732,7 @@ export function AuthFilesPage() {
                 options={[
                   { value: 'all', label: t('auth_files.status_filter_all') },
                   { value: 'enabled', label: t('auth_files.status_filter_enabled') },
-                  { value: 'disabled', label: t('auth_files.status_filter_disabled') }
+                  { value: 'disabled', label: t('auth_files.status_filter_disabled') },
                 ]}
                 onChange={(value) => {
                   setStatusFilter(value as 'all' | 'enabled' | 'disabled');
@@ -619,6 +778,10 @@ export function AuthFilesPage() {
                 key={file.name}
                 file={file}
                 selected={selectedFiles.has(file.name)}
+                highlighted={highlightedAuthName === file.name}
+                cardRef={(node) => {
+                  authCardRefs.current[file.name] = node;
+                }}
                 resolvedTheme={resolvedTheme}
                 disableControls={disableControls}
                 deleting={deleting}
@@ -717,6 +880,7 @@ export function AuthFilesPage() {
         editor={prefixProxyEditor}
         updatedText={prefixProxyUpdatedText}
         dirty={prefixProxyDirty}
+        validationError={prefixProxyValidationError}
         onClose={closePrefixProxyEditor}
         onSave={handlePrefixProxySave}
         onChange={handlePrefixProxyChange}

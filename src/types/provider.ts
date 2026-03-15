@@ -46,6 +46,19 @@ export interface ProviderKeyConfig {
   cloak?: CloakConfig;
 }
 
+export interface NotionKeyConfig {
+  tokenV2: string;
+  spaceId: string;
+  userId: string;
+  priority?: number;
+  prefix?: string;
+  baseUrl?: string;
+  proxyUrl?: string;
+  headers?: Record<string, string>;
+  models?: ModelAlias[];
+  excludedModels?: string[];
+}
+
 export interface OpenAIProviderConfig {
   name: string;
   prefix?: string;

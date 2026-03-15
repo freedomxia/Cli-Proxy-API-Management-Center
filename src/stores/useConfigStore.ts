@@ -50,9 +50,10 @@ const SECTION_KEYS: RawConfigSection[] = [
   'gemini-api-key',
   'codex-api-key',
   'claude-api-key',
+  'notion-api-key',
   'vertex-api-key',
   'openai-compatibility',
-  'oauth-excluded-models'
+  'oauth-excluded-models',
 ];
 
 const extractSectionValue = (config: Config | null, section?: RawConfigSection) => {
@@ -90,6 +91,8 @@ const extractSectionValue = (config: Config | null, section?: RawConfigSection) 
       return config.codexApiKeys;
     case 'claude-api-key':
       return config.claudeApiKeys;
+    case 'notion-api-key':
+      return config.notionApiKeys;
     case 'vertex-api-key':
       return config.vertexApiKeys;
     case 'openai-compatibility':
@@ -162,17 +165,21 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       set({
         config: data,
         cache: newCache,
-        loading: false
+        loading: false,
       });
 
       return section ? extractSectionValue(data, section) : data;
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : typeof error === 'string' ? error : 'Failed to fetch config';
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : 'Failed to fetch config';
       if (requestId === configRequestToken) {
         set({
           error: message || 'Failed to fetch config',
-          loading: false
+          loading: false,
         });
       }
       throw error;
@@ -238,6 +245,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         case 'claude-api-key':
           nextConfig.claudeApiKeys = value as Config['claudeApiKeys'];
           break;
+        case 'notion-api-key':
+          nextConfig.notionApiKeys = value as Config['notionApiKeys'];
+          break;
         case 'vertex-api-key':
           nextConfig.vertexApiKeys = value as Config['vertexApiKeys'];
           break;
@@ -288,5 +298,5 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     if (!cached) return false;
 
     return Date.now() - cached.timestamp < CACHE_EXPIRY_MS;
-  }
+  },
 }));

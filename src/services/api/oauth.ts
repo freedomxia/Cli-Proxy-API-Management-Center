@@ -30,6 +30,19 @@ export interface IFlowCookieAuthResponse {
   type?: string;
 }
 
+export interface NotionImportResponse {
+  status: 'ok';
+  saved_path?: string;
+  user_email?: string;
+  user_name?: string;
+  user_id?: string;
+  space_id?: string;
+  space_view_id?: string;
+  base_url?: string;
+  prefix?: string;
+  created?: boolean;
+}
+
 const WEBUI_SUPPORTED: OAuthProvider[] = ['codex', 'anthropic', 'antigravity', 'gemini-cli'];
 const CALLBACK_PROVIDER_MAP: Partial<Record<OAuthProvider, string>> = {
   'gemini-cli': 'gemini'
@@ -64,5 +77,13 @@ export const oauthApi = {
 
   /** iFlow cookie 认证 */
   iflowCookieAuth: (cookie: string) =>
-    apiClient.post<IFlowCookieAuthResponse>('/iflow-auth-url', { cookie })
+    apiClient.post<IFlowCookieAuthResponse>('/iflow-auth-url', { cookie }),
+
+  /** Notion token_v2 导入 */
+  notionImport: (payload: {
+    token_v2?: string;
+    base_url?: string;
+    prefix?: string;
+    extracted_text?: string;
+  }) => apiClient.post<NotionImportResponse>('/notion-auth-import', payload)
 };
