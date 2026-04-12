@@ -62,6 +62,7 @@ export type VisualConfigValues = {
   rmDisableControlPanel: boolean;
   rmPanelRepo: string;
   authDir: string;
+  pluginConnectionToken: string;
   apiKeysText: string;
   debug: boolean;
   commercialMode: boolean;
@@ -102,6 +103,7 @@ export const DEFAULT_VISUAL_VALUES: VisualConfigValues = {
   rmDisableControlPanel: false,
   rmPanelRepo: '',
   authDir: '',
+  pluginConnectionToken: '',
   apiKeysText: '',
   debug: false,
   commercialMode: false,

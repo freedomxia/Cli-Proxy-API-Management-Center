@@ -746,6 +746,17 @@ export function VisualConfigEditor({
                 disabled={disabled}
                 hint={t('config_management.visual.sections.auth.auth_dir_hint')}
               />
+              <Input
+                label={t('config_management.visual.sections.auth.plugin_connection_token')}
+                type="password"
+                placeholder={t(
+                  'config_management.visual.sections.auth.plugin_connection_token_placeholder'
+                )}
+                value={values.pluginConnectionToken}
+                onChange={(e) => onChange({ pluginConnectionToken: e.target.value })}
+                disabled={disabled}
+                hint={t('config_management.visual.sections.auth.plugin_connection_token_hint')}
+              />
               <div className={styles.subsection}>
                 <ApiKeysCardEditor
                   value={values.apiKeysText}

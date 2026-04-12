@@ -113,6 +113,7 @@
     "api_keys": "API Keys",
     "ai_providers": "AI Providers",
     "auth_files": "Auth Files",
+    "plugin_connection": "Plugin Connection",
     "oauth": "OAuth Login",
     "quota_management": "Quota Management",
     "usage_stats": "Usage Statistics",
@@ -1152,6 +1153,22 @@
     "upgrade_required_title": "Please Upgrade CLI Proxy API",
     "upgrade_required_desc": "The current server version does not support the logs viewing feature. Please upgrade to the latest version of CLI Proxy API to use this feature."
   },
+  "plugin_connection": {
+    "title": "Plugin Connection Settings",
+    "connection_interface": "Connection Endpoint",
+    "connection_interface_hint": "Configure this endpoint URL in the Chrome extension",
+    "connection_token": "Connection Token",
+    "connection_token_placeholder": "Leave blank to generate a random token when saving",
+    "connection_token_hint": "Used to authorize external plugin uploads. Leave blank to auto-generate a random token",
+    "auto_enable_on_update": "Auto-enable when token updates",
+    "auto_enable_on_update_hint": "If a token is disabled, automatically enable it again when the plugin refreshes it",
+    "random": "Random",
+    "save": "Save Settings",
+    "save_success": "Plugin connection settings saved",
+    "save_failed": "Failed to save plugin connection settings",
+    "load_failed": "Failed to load plugin connection settings",
+    "usage_note": "Usage: configure the endpoint and token in the external plugin/token updater so it can push credentials into CLI Proxy API automatically."
+  },
   "config_management": {
     "title": "Config Panel",
     "editor_title": "Configuration File",
@@ -1232,7 +1249,10 @@
           "title": "Authentication Configuration",
           "description": "API keys and authentication directory settings",
           "auth_dir": "Auth Directory (auth-dir)",
-          "auth_dir_hint": "Directory path for authentication files (supports ~)"
+          "auth_dir_hint": "Directory path for authentication files (supports ~)",
+          "plugin_connection_token": "Plugin Connection Token (plugin-connection-token)",
+          "plugin_connection_token_placeholder": "Set the connection token used by external token updaters",
+          "plugin_connection_token_hint": "Used to authorize /api/plugin/* requests; leave empty to disable external plugin credential uploads"
         },
         "system": {
           "title": "System Configuration",

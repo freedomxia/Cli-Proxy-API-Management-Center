@@ -584,6 +584,12 @@ function getNextDirtyFields(
   if (Object.prototype.hasOwnProperty.call(patch, 'authDir')) {
     updateDirty('authDir', nextValues.authDir === baselineValues.authDir);
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'pluginConnectionToken')) {
+    updateDirty(
+      'pluginConnectionToken',
+      nextValues.pluginConnectionToken === baselineValues.pluginConnectionToken
+    );
+  }
   if (Object.prototype.hasOwnProperty.call(patch, 'apiKeysText')) {
     updateDirty('apiKeysText', nextValues.apiKeysText === baselineValues.apiKeysText);
   }
@@ -816,6 +822,10 @@ export function useVisualConfig() {
               : '',
 
         authDir: typeof parsed['auth-dir'] === 'string' ? parsed['auth-dir'] : '',
+        pluginConnectionToken:
+          typeof parsed['plugin-connection-token'] === 'string'
+            ? parsed['plugin-connection-token']
+            : '',
         apiKeysText: resolveApiKeysText(parsed),
 
         debug: Boolean(parsed.debug),
@@ -908,6 +918,7 @@ export function useVisualConfig() {
         }
 
         setStringInDoc(doc, ['auth-dir'], values.authDir);
+        setStringInDoc(doc, ['plugin-connection-token'], values.pluginConnectionToken);
         const apiKeys = values.apiKeysText
           .split('\n')
           .map((key) => key.trim())

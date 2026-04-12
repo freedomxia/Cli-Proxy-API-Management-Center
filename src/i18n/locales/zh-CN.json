@@ -113,6 +113,7 @@
     "api_keys": "API 密钥",
     "ai_providers": "AI 提供商",
     "auth_files": "认证文件",
+    "plugin_connection": "插件连接",
     "oauth": "OAuth 登录",
     "quota_management": "配额管理",
     "usage_stats": "使用统计",
@@ -1152,6 +1153,22 @@
     "upgrade_required_title": "需要升级 CLI Proxy API",
     "upgrade_required_desc": "当前服务器版本不支持日志查看功能，请升级到最新版本的 CLI Proxy API 以使用此功能。"
   },
+  "plugin_connection": {
+    "title": "插件连接配置",
+    "connection_interface": "连接接口",
+    "connection_interface_hint": "在浏览器插件或外部 Token Updater 中配置此接口地址",
+    "connection_token": "连接令牌",
+    "connection_token_placeholder": "留空保存时自动生成随机令牌",
+    "connection_token_hint": "用于验证外部插件上传请求；留空将自动生成随机令牌",
+    "auto_enable_on_update": "更新 token 时自动启用",
+    "auto_enable_on_update_hint": "当插件刷新 token 时，如果对应认证文件被禁用，则自动重新启用",
+    "random": "随机",
+    "save": "保存配置",
+    "save_success": "插件连接配置已保存",
+    "save_failed": "保存插件连接配置失败",
+    "load_failed": "加载插件连接配置失败",
+    "usage_note": "使用说明：在浏览器插件或外部 Token Updater 中填入连接接口和令牌，工具即可自动把凭证推送到 CLI Proxy API。"
+  },
   "config_management": {
     "title": "配置面板",
     "editor_title": "配置文件",
@@ -1232,7 +1249,10 @@
           "title": "认证配置",
           "description": "API 密钥与认证文件目录设置",
           "auth_dir": "认证文件目录 (auth-dir)",
-          "auth_dir_hint": "存放认证文件的目录路径（支持 ~）"
+          "auth_dir_hint": "存放认证文件的目录路径（支持 ~）",
+          "plugin_connection_token": "插件连接令牌 (plugin-connection-token)",
+          "plugin_connection_token_placeholder": "设置外部 Token Updater 使用的连接令牌",
+          "plugin_connection_token_hint": "用于 /api/plugin/* 接口鉴权；留空表示禁用外部插件凭证推送"
         },
         "system": {
           "title": "系统配置",
